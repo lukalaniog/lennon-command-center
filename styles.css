@@ -187,6 +187,15 @@ h3 {
   gap: 8px;
 }
 
+.apps {
+  display: flex;
+  flex-direction: column;
+}
+
+.apps .button-grid {
+  flex: 1;
+}
+
 .app-btn {
   display: flex;
   align-items: center;
@@ -259,6 +268,76 @@ h3 {
   margin: 8px 0 0;
   font-size: 0.74rem;
   color: var(--muted);
+}
+
+.pomodoro-box {
+  margin-top: 8px;
+  border: 1px solid rgba(97, 130, 255, 0.24);
+  border-radius: 12px;
+  background: rgba(7, 13, 28, 0.6);
+  padding: 8px;
+}
+
+.pomodoro-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.pomodoro-head h3 {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.pomodoro-round {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  margin: 0 auto 8px;
+}
+
+.pomodoro-round svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.pomo-track,
+.pomo-progress {
+  fill: none;
+  stroke-width: 8;
+}
+
+.pomo-track {
+  stroke: rgba(97, 130, 255, 0.22);
+}
+
+.pomo-progress {
+  stroke: #00d7c3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 220ms linear;
+}
+
+.pomodoro-time {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 700 1.1rem/1 "Space Grotesk", sans-serif;
+  color: #dcf7f4;
+}
+
+.pomodoro-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.pomodoro-actions button {
+  padding: 6px 8px;
+  font-size: 0.78rem;
 }
 
 .weather-main {

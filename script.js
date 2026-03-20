@@ -9,6 +9,7 @@ const STORAGE_KEYS = {
   todos: "lennon_todos",
   links: "lennon_links",
   walk: "lennon_walk",
+  pomodoro: "lennon_pomodoro",
   quoteCache: "lennon_quote_cache",
   gptKeys: "lennon_llm_api_keys",
 };
@@ -62,6 +63,11 @@ const refs = {
   walkDistance: document.getElementById("walk-distance"),
   walkElevation: document.getElementById("walk-elevation"),
   walkReset: document.getElementById("walk-reset"),
+  pomoTime: document.getElementById("pomo-time"),
+  pomoProgress: document.getElementById("pomo-progress"),
+  pomoStatus: document.getElementById("pomo-status"),
+  pomoStart: document.getElementById("pomo-start"),
+  pomoReset: document.getElementById("pomo-reset"),
   nbaStatus: document.getElementById("nba-status"),
   nbaLiveList: document.getElementById("nba-live-list"),
   eastStandings: document.getElementById("east-standings"),
@@ -112,6 +118,14 @@ let walk = loadJSON(STORAGE_KEYS.walk, {
 let reliveMapInstance = null;
 let reliveRoute = null;
 let reliveMarker = null;
+const POMODORO_DEFAULT_SEC = 25 * 60;
+const POMODORO_RING_CIRC = 2 * Math.PI * 52;
+let pomodoro = loadJSON(STORAGE_KEYS.pomodoro, {
+  totalSec: POMODORO_DEFAULT_SEC,
+  remainingSec: POMODORO_DEFAULT_SEC,
+  running: false,
+  lastTickMs: null,
+});
 
 function updateDateTime() {
   const now = new Date();
@@ -414,6 +428,85 @@ function syncReliveFromApp(payload) {
   setReliveRoute(route);
   saveJSON(STORAGE_KEYS.walk, walk);
   renderWalk();
+}
+
+function formatPomodoro(seconds) {
+  const safe = Math.max(0, Math.floor(seconds));
+  const m = String(Math.floor(safe / 60)).padStart(2, "0");
+  const s = String(safe % 60).padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+function normalizePomodoroState() {
+  const total = Number(pomodoro?.totalSec);
+  const remaining = Number(pomodoro?.remainingSec);
+
+  pomodoro.totalSec = Number.isFinite(total) && total > 0 ? Math.floor(total) : POMODORO_DEFAULT_SEC;
+  pomodoro.remainingSec = Number.isFinite(remaining) ? Math.min(Math.max(0, Math.floor(remaining)), pomodoro.totalSec) : pomodoro.totalSec;
+  pomodoro.running = Boolean(pomodoro?.running) && pomodoro.remainingSec > 0;
+  pomodoro.lastTickMs = Number.isFinite(Number(pomodoro?.lastTickMs)) ? Number(pomodoro.lastTickMs) : null;
+}
+
+function renderPomodoro() {
+  if (!refs.pomoTime || !refs.pomoProgress || !refs.pomoStatus || !refs.pomoStart) return;
+  normalizePomodoroState();
+
+  const done = pomodoro.remainingSec <= 0;
+  const progress = (pomodoro.totalSec - pomodoro.remainingSec) / pomodoro.totalSec;
+  const dashOffset = POMODORO_RING_CIRC * (1 - Math.min(1, Math.max(0, progress)));
+
+  refs.pomoTime.textContent = formatPomodoro(pomodoro.remainingSec);
+  refs.pomoProgress.style.strokeDasharray = `${POMODORO_RING_CIRC}`;
+  refs.pomoProgress.style.strokeDashoffset = `${dashOffset}`;
+  refs.pomoStatus.textContent = done ? "Done" : pomodoro.running ? "Focus" : "Paused";
+  refs.pomoStart.textContent = pomodoro.running ? "Pause" : "Start";
+}
+
+function setupPomodoro() {
+  if (!refs.pomoStart || !refs.pomoReset) return;
+  normalizePomodoroState();
+  renderPomodoro();
+
+  refs.pomoStart.addEventListener("click", () => {
+    if (pomodoro.running) {
+      pomodoro.running = false;
+      pomodoro.lastTickMs = null;
+    } else {
+      if (pomodoro.remainingSec <= 0) {
+        pomodoro.remainingSec = pomodoro.totalSec;
+      }
+      pomodoro.running = true;
+      pomodoro.lastTickMs = Date.now();
+    }
+    saveJSON(STORAGE_KEYS.pomodoro, pomodoro);
+    renderPomodoro();
+  });
+
+  refs.pomoReset.addEventListener("click", () => {
+    pomodoro.running = false;
+    pomodoro.lastTickMs = null;
+    pomodoro.remainingSec = pomodoro.totalSec;
+    saveJSON(STORAGE_KEYS.pomodoro, pomodoro);
+    renderPomodoro();
+  });
+
+  setInterval(() => {
+    if (!pomodoro.running) return;
+    const now = Date.now();
+    const last = pomodoro.lastTickMs || now;
+    const elapsedSec = Math.floor((now - last) / 1000);
+    if (elapsedSec < 1) return;
+
+    pomodoro.remainingSec = Math.max(0, pomodoro.remainingSec - elapsedSec);
+    pomodoro.lastTickMs = last + elapsedSec * 1000;
+    if (pomodoro.remainingSec <= 0) {
+      pomodoro.running = false;
+      pomodoro.lastTickMs = null;
+    }
+
+    saveJSON(STORAGE_KEYS.pomodoro, pomodoro);
+    renderPomodoro();
+  }, 250);
 }
 
 function setupWalkTracker() {
@@ -1029,6 +1122,7 @@ setInterval(updateDateTime, 1000);
 setInterval(updateQuote, QUOTE_REFRESH_MS);
 
 bindAppButtons();
+setupPomodoro();
 setupWalkTracker();
 setupGptBox();
 setupNotes();

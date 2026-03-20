@@ -91,6 +91,23 @@
           </span>
         </button>
       </div>
+      <div class="pomodoro-box">
+        <div class="pomodoro-head">
+          <h3>Pomodoro</h3>
+          <span class="badge" id="pomo-status">Paused</span>
+        </div>
+        <div class="pomodoro-round">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="pomo-track" cx="60" cy="60" r="52"></circle>
+            <circle class="pomo-progress" id="pomo-progress" cx="60" cy="60" r="52"></circle>
+          </svg>
+          <div class="pomodoro-time" id="pomo-time">25:00</div>
+        </div>
+        <div class="pomodoro-actions">
+          <button id="pomo-start" type="button">Start</button>
+          <button id="pomo-reset" type="button">Reset</button>
+        </div>
+      </div>
       <p class="tiny-note">Bells use your signed-in browser session when accessible.</p>
     </section>
 
