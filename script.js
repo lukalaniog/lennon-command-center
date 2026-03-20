@@ -598,10 +598,22 @@ function renderLiveNBA(items) {
     return;
   }
 
-  items.forEach((game) => {
+  const displayGames = [...items];
+  while (displayGames.length < 4) {
+    displayGames.push({
+      away: "--",
+      awayScore: "-",
+      home: "--",
+      homeScore: "-",
+      status: "No additional game",
+      playerOfGame: "TBD",
+    });
+  }
+
+  displayGames.forEach((game) => {
     const li = document.createElement("li");
     li.className = "feed-item";
-    li.innerHTML = `<div>${game.away} ${game.awayScore} - ${game.home} ${game.homeScore}</div><div class="feed-meta">${game.status}</div>`;
+    li.innerHTML = `<div>${game.away} ${game.awayScore} - ${game.home} ${game.homeScore}</div><div class="feed-meta">${game.status}</div><div class="live-potg">POTG: ${game.playerOfGame}</div>`;
     refs.nbaLiveList.appendChild(li);
   });
 }
@@ -665,19 +677,6 @@ function renderStandings(el, entries) {
     const rank = Number.isFinite(row.seed) ? row.seed : idx + 1;
     li.innerHTML = `<div class="standing-row"><span class="standing-team"><span class="standing-seed">#${rank}</span>${row.team}</span><span class="standing-rec">${row.record} | GB ${row.gb}</span></div>`;
     el.appendChild(li);
-  });
-}
-
-function setupStandingsToggles() {
-  document.querySelectorAll(".toggle-standings").forEach((button) => {
-    button.addEventListener("click", () => {
-      const targetId = button.dataset.target;
-      const list = targetId ? document.getElementById(targetId) : null;
-      if (!list) return;
-
-      const hidden = list.classList.toggle("hidden-standings");
-      button.textContent = hidden ? "Show" : "Hide";
-    });
   });
 }
 
@@ -892,6 +891,18 @@ async function updateNBA() {
       const home = teams.find((t) => t.homeAway === "home") || {};
       const away = teams.find((t) => t.homeAway === "away") || {};
       const status = event.status?.type?.detail || event.status?.type?.description || "Scheduled";
+      const pointLeaders = (Array.isArray(comp?.leaders) ? comp.leaders : [])
+        .filter((leader) => String(leader?.name || "").toLowerCase().includes("point"))
+        .map((leader) => {
+          const top = Array.isArray(leader?.leaders) ? leader.leaders[0] : null;
+          return {
+            name: top?.athlete?.shortName || top?.athlete?.displayName || "",
+            value: Number(top?.value ?? 0),
+          };
+        })
+        .filter((leader) => leader.name);
+      const bestLeader = pointLeaders.sort((a, b) => b.value - a.value)[0];
+      const playerOfGame = bestLeader ? `${bestLeader.name} (${bestLeader.value} PTS)` : "TBD";
 
       return {
         home: home.team?.abbreviation || "HOME",
@@ -899,6 +910,7 @@ async function updateNBA() {
         homeScore: home.score ?? "0",
         awayScore: away.score ?? "0",
         status,
+        playerOfGame,
       };
     });
 
@@ -992,7 +1004,6 @@ setInterval(updateQuote, QUOTE_REFRESH_MS);
 
 bindAppButtons();
 setupWalkTracker();
-setupStandingsToggles();
 setupGptBox();
 setupNotes();
 setupTodos();

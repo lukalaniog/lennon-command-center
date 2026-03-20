@@ -456,6 +456,16 @@ h3 {
   text-overflow: ellipsis;
 }
 
+.live-potg {
+  margin-top: 1px;
+  color: #9eb6df;
+  font-size: 0.56rem;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 #nba-live-list,
 #east-standings,
 #west-standings {
@@ -466,7 +476,7 @@ h3 {
 }
 
 #nba-live-list {
-  max-height: calc(3 * 2.35em);
+  max-height: calc(4 * 3.45em);
 }
 
 #east-standings,
@@ -493,18 +503,7 @@ h3 {
 .standings-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.toggle-standings {
-  padding: 4px 8px;
-  font-size: 0.68rem;
-  border-radius: 8px;
-}
-
-.hidden-standings {
-  display: none;
+  justify-content: flex-start;
 }
 
 .apps,
