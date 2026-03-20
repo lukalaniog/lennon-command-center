@@ -59,8 +59,8 @@ const refs = {
   reliveSync: document.getElementById("relive-sync"),
   reliveMap: document.getElementById("relive-map"),
   walkDuration: document.getElementById("walk-duration"),
-  walkSteps: document.getElementById("walk-steps"),
   walkDistance: document.getElementById("walk-distance"),
+  walkElevation: document.getElementById("walk-elevation"),
   walkReset: document.getElementById("walk-reset"),
   nbaStatus: document.getElementById("nba-status"),
   nbaLiveList: document.getElementById("nba-live-list"),
@@ -100,13 +100,15 @@ let walk = loadJSON(STORAGE_KEYS.walk, {
   active: false,
   startedAt: null,
   elapsedMs: 0,
+  durationLabel: "00:00:00",
   distanceKm: 0,
-  strideMeters: 0.78,
+  distanceLabel: "0.00 km",
+  elevationM: 0,
+  elevationLabel: "0 m",
   lastPoint: null,
   route: [],
 });
 
-let walkWatchId = null;
 let reliveMapInstance = null;
 let reliveRoute = null;
 let reliveMarker = null;
@@ -270,25 +272,15 @@ function currentWalkElapsed() {
   return walk.elapsedMs + (Date.now() - walk.startedAt);
 }
 
-function haversineKm(a, b) {
-  const toRad = (deg) => (deg * Math.PI) / 180;
-  const R = 6371;
-  const dLat = toRad(b.lat - a.lat);
-  const dLon = toRad(b.lon - a.lon);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-
-  const x = Math.sin(dLat / 2) ** 2 + Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-  return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-}
-
 function renderWalk() {
   const elapsed = currentWalkElapsed();
-  const steps = Math.round((walk.distanceKm * 1000) / walk.strideMeters);
+  const durationText = walk.durationLabel || formatDuration(elapsed);
+  const distanceText = walk.distanceLabel || `${walk.distanceKm.toFixed(2)} km`;
+  const elevationText = walk.elevationLabel || `${Math.round(walk.elevationM || 0)} m`;
 
-  refs.walkDuration.textContent = formatDuration(elapsed);
-  refs.walkSteps.textContent = steps.toLocaleString();
-  refs.walkDistance.textContent = `${walk.distanceKm.toFixed(2)} km`;
+  refs.walkDuration.textContent = durationText;
+  refs.walkDistance.textContent = distanceText;
+  refs.walkElevation.textContent = elevationText;
 }
 
 function initReliveMap() {
@@ -320,12 +312,22 @@ function initReliveMap() {
   }
 }
 
-function updateReliveMap(point) {
+function setReliveRoute(routePoints) {
   if (!reliveMapInstance || !reliveRoute) return;
-  reliveRoute.addLatLng([point.lat, point.lon]);
+  if (!Array.isArray(routePoints) || !routePoints.length) {
+    reliveRoute.setLatLngs([]);
+    if (reliveMarker) {
+      reliveMapInstance.removeLayer(reliveMarker);
+      reliveMarker = null;
+    }
+    return;
+  }
+
+  reliveRoute.setLatLngs(routePoints.map((point) => [point.lat, point.lon]));
+  const last = routePoints[routePoints.length - 1];
 
   if (!reliveMarker) {
-    reliveMarker = L.circleMarker([point.lat, point.lon], {
+    reliveMarker = L.circleMarker([last.lat, last.lon], {
       radius: 4,
       color: "#ff7a00",
       fillColor: "#ff7a00",
@@ -333,60 +335,85 @@ function updateReliveMap(point) {
       weight: 1,
     }).addTo(reliveMapInstance);
   } else {
-    reliveMarker.setLatLng([point.lat, point.lon]);
+    reliveMarker.setLatLng([last.lat, last.lon]);
   }
+  reliveMapInstance.fitBounds(reliveRoute.getBounds(), { padding: [20, 20] });
 }
 
-function stopGeoWatch() {
-  if (walkWatchId !== null && navigator.geolocation) {
-    navigator.geolocation.clearWatch(walkWatchId);
-    walkWatchId = null;
+function getDurationFromRelive(payload) {
+  if (typeof payload?.durationText === "string" && payload.durationText.trim()) {
+    return payload.durationText.trim();
   }
+  const durationMs = Number(payload?.durationMs);
+  if (Number.isFinite(durationMs) && durationMs >= 0) return formatDuration(durationMs);
+
+  const durationSec = Number(payload?.durationSec);
+  if (Number.isFinite(durationSec) && durationSec >= 0) return formatDuration(durationSec * 1000);
+  return "00:00:00";
 }
 
-function startGeoWatch() {
-  if (!navigator.geolocation) {
-    refs.reliveSync.textContent = "Live GPS not available in this browser.";
-    return;
+function getDistanceFromRelive(payload) {
+  if (typeof payload?.distanceText === "string" && payload.distanceText.trim()) {
+    return { km: Number(payload?.distanceKm) || 0, label: payload.distanceText.trim() };
   }
 
-  refs.reliveSync.textContent = "Listening for movement...";
+  const distanceKm = Number(payload?.distanceKm);
+  if (Number.isFinite(distanceKm) && distanceKm >= 0) {
+    return { km: distanceKm, label: `${distanceKm.toFixed(2)} km` };
+  }
 
-  walkWatchId = navigator.geolocation.watchPosition(
-    (position) => {
-      const point = {
-        lat: position.coords.latitude,
-        lon: position.coords.longitude,
-      };
+  const distanceM = Number(payload?.distanceM);
+  if (Number.isFinite(distanceM) && distanceM >= 0) {
+    const km = distanceM / 1000;
+    return { km, label: `${km.toFixed(2)} km` };
+  }
 
-      if (walk.lastPoint) {
-        const deltaKm = haversineKm(walk.lastPoint, point);
-        if (deltaKm > 0.001 && deltaKm < 0.2) {
-          if (!walk.active) {
-            walk.active = true;
-            walk.startedAt = Number(position.timestamp) || Date.now();
-            refs.reliveSync.textContent = "Activity detected. Live tracking started.";
-          }
-          walk.distanceKm += deltaKm;
-          walk.route.push(point);
-          updateReliveMap(point);
-        }
-      } else {
-        walk.route.push(point);
-        updateReliveMap(point);
-      }
+  return { km: 0, label: "0.00 km" };
+}
 
-      walk.lastPoint = point;
-      if (walk.active) {
-        refs.reliveSync.textContent = `Live GPS tracking (${new Date(position.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })})`;
-      }
-      renderWalk();
-    },
-    () => {
-      refs.reliveSync.textContent = "Waiting for location permission/signal...";
-    },
-    { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
-  );
+function getElevationFromRelive(payload) {
+  if (typeof payload?.elevationText === "string" && payload.elevationText.trim()) {
+    return { m: Number(payload?.elevationM) || 0, label: payload.elevationText.trim() };
+  }
+
+  const elevationM = Number(payload?.elevationM ?? payload?.elevationGainM);
+  if (Number.isFinite(elevationM)) {
+    return { m: elevationM, label: `${Math.round(elevationM)} m` };
+  }
+
+  return { m: 0, label: "0 m" };
+}
+
+function syncReliveFromApp(payload) {
+  if (!payload || typeof payload !== "object") return;
+
+  const durationLabel = getDurationFromRelive(payload);
+  const distance = getDistanceFromRelive(payload);
+  const elevation = getElevationFromRelive(payload);
+  const route = Array.isArray(payload.route)
+    ? payload.route
+        .map((point) => ({
+          lat: Number(point?.lat),
+          lon: Number(point?.lon),
+        }))
+        .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon))
+    : [];
+
+  walk.active = Boolean(payload.active);
+  walk.startedAt = null;
+  walk.elapsedMs = 0;
+  walk.durationLabel = durationLabel;
+  walk.distanceKm = distance.km;
+  walk.distanceLabel = distance.label;
+  walk.elevationM = elevation.m;
+  walk.elevationLabel = elevation.label;
+  walk.route = route;
+  walk.lastPoint = route.length ? route[route.length - 1] : null;
+
+  refs.reliveSync.textContent = `Synced from Relive app (${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })})`;
+  setReliveRoute(route);
+  saveJSON(STORAGE_KEYS.walk, walk);
+  renderWalk();
 }
 
 function setupWalkTracker() {
@@ -398,23 +425,22 @@ function setupWalkTracker() {
     walk.active = false;
     walk.startedAt = null;
     walk.distanceKm = 0;
+    walk.distanceLabel = "0.00 km";
+    walk.elevationM = 0;
+    walk.elevationLabel = "0 m";
+    walk.durationLabel = "00:00:00";
     walk.lastPoint = null;
     walk.route = [];
-    if (reliveRoute) reliveRoute.setLatLngs([]);
-    if (reliveMarker) {
-      reliveMapInstance.removeLayer(reliveMarker);
-      reliveMarker = null;
-    }
-    refs.reliveSync.textContent = "Route reset. Waiting for next movement...";
+    setReliveRoute([]);
+    refs.reliveSync.textContent = "Route reset. Waiting for Relive app sync.";
     saveJSON(STORAGE_KEYS.walk, walk);
     renderWalk();
   });
 
   initReliveMap();
-  if (Array.isArray(walk.route) && walk.route.length && reliveRoute) {
-    reliveRoute.setLatLngs(walk.route.map((p) => [p.lat, p.lon]));
-  }
-  startGeoWatch();
+  setReliveRoute(Array.isArray(walk.route) ? walk.route : []);
+  window.updateReliveFromApp = syncReliveFromApp;
+  refs.reliveSync.textContent = "Waiting for Relive app sync.";
   renderWalk();
 
   setInterval(() => {
