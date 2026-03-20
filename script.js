@@ -68,6 +68,10 @@ const refs = {
   pomoStatus: document.getElementById("pomo-status"),
   pomoStart: document.getElementById("pomo-start"),
   pomoReset: document.getElementById("pomo-reset"),
+  pomoMinus: document.getElementById("pomo-minus"),
+  pomoPlus: document.getElementById("pomo-plus"),
+  pomoAlarm: document.getElementById("pomo-alarm"),
+  pomoTest: document.getElementById("pomo-test"),
   nbaStatus: document.getElementById("nba-status"),
   nbaLiveList: document.getElementById("nba-live-list"),
   eastStandings: document.getElementById("east-standings"),
@@ -120,12 +124,15 @@ let reliveRoute = null;
 let reliveMarker = null;
 const POMODORO_DEFAULT_SEC = 25 * 60;
 const POMODORO_RING_CIRC = 2 * Math.PI * 52;
+const POMODORO_STEP_SEC = 60;
 let pomodoro = loadJSON(STORAGE_KEYS.pomodoro, {
   totalSec: POMODORO_DEFAULT_SEC,
   remainingSec: POMODORO_DEFAULT_SEC,
   running: false,
   lastTickMs: null,
+  alarmTone: "beep",
 });
+let pomodoroAudioCtx = null;
 
 function updateDateTime() {
   const now = new Date();
@@ -440,11 +447,13 @@ function formatPomodoro(seconds) {
 function normalizePomodoroState() {
   const total = Number(pomodoro?.totalSec);
   const remaining = Number(pomodoro?.remainingSec);
+  const tone = typeof pomodoro?.alarmTone === "string" ? pomodoro.alarmTone : "beep";
 
   pomodoro.totalSec = Number.isFinite(total) && total > 0 ? Math.floor(total) : POMODORO_DEFAULT_SEC;
   pomodoro.remainingSec = Number.isFinite(remaining) ? Math.min(Math.max(0, Math.floor(remaining)), pomodoro.totalSec) : pomodoro.totalSec;
   pomodoro.running = Boolean(pomodoro?.running) && pomodoro.remainingSec > 0;
   pomodoro.lastTickMs = Number.isFinite(Number(pomodoro?.lastTickMs)) ? Number(pomodoro.lastTickMs) : null;
+  pomodoro.alarmTone = ["beep", "bell", "digital"].includes(tone) ? tone : "beep";
 }
 
 function renderPomodoro() {
@@ -460,6 +469,71 @@ function renderPomodoro() {
   refs.pomoProgress.style.strokeDashoffset = `${dashOffset}`;
   refs.pomoStatus.textContent = done ? "Done" : pomodoro.running ? "Focus" : "Paused";
   refs.pomoStart.textContent = pomodoro.running ? "Pause" : "Start";
+  if (refs.pomoAlarm) refs.pomoAlarm.value = pomodoro.alarmTone;
+}
+
+function getPomodoroAudioContext() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!pomodoroAudioCtx) pomodoroAudioCtx = new AudioCtx();
+  return pomodoroAudioCtx;
+}
+
+function playTone(audioCtx, frequency, durationMs, type = "sine", gainValue = 0.13, delayMs = 0) {
+  const startAt = audioCtx.currentTime + delayMs / 1000;
+  const endAt = startAt + durationMs / 1000;
+  const oscillator = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, startAt);
+  gain.gain.setValueAtTime(0.0001, startAt);
+  gain.gain.exponentialRampToValueAtTime(gainValue, startAt + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, endAt);
+
+  oscillator.connect(gain);
+  gain.connect(audioCtx.destination);
+  oscillator.start(startAt);
+  oscillator.stop(endAt);
+}
+
+async function playPomodoroAlarm() {
+  const audioCtx = getPomodoroAudioContext();
+  if (!audioCtx) return;
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+
+  if (pomodoro.alarmTone === "bell") {
+    [0, 180, 360].forEach((delay) => {
+      playTone(audioCtx, 880, 220, "triangle", 0.14, delay);
+      playTone(audioCtx, 1320, 200, "sine", 0.08, delay + 40);
+    });
+    return;
+  }
+
+  if (pomodoro.alarmTone === "digital") {
+    [0, 130, 260, 390].forEach((delay, index) => {
+      const freq = index % 2 ? 1200 : 900;
+      playTone(audioCtx, freq, 80, "square", 0.11, delay);
+    });
+    return;
+  }
+
+  [0, 220].forEach((delay) => {
+    playTone(audioCtx, 980, 160, "sine", 0.15, delay);
+  });
+}
+
+function adjustPomodoroTotal(deltaSec) {
+  normalizePomodoroState();
+  const nextTotal = Math.min(120 * 60, Math.max(60, pomodoro.totalSec + deltaSec));
+  if (nextTotal === pomodoro.totalSec) return;
+
+  const nextRemaining = Math.min(nextTotal, Math.max(0, pomodoro.remainingSec + deltaSec));
+  pomodoro.totalSec = nextTotal;
+  pomodoro.remainingSec = nextRemaining;
+  if (pomodoro.running) pomodoro.lastTickMs = Date.now();
+  saveJSON(STORAGE_KEYS.pomodoro, pomodoro);
+  renderPomodoro();
 }
 
 function setupPomodoro() {
@@ -490,6 +564,28 @@ function setupPomodoro() {
     renderPomodoro();
   });
 
+  if (refs.pomoMinus) {
+    refs.pomoMinus.addEventListener("click", () => adjustPomodoroTotal(-POMODORO_STEP_SEC));
+  }
+
+  if (refs.pomoPlus) {
+    refs.pomoPlus.addEventListener("click", () => adjustPomodoroTotal(POMODORO_STEP_SEC));
+  }
+
+  if (refs.pomoAlarm) {
+    refs.pomoAlarm.addEventListener("change", () => {
+      pomodoro.alarmTone = refs.pomoAlarm.value;
+      saveJSON(STORAGE_KEYS.pomodoro, pomodoro);
+      renderPomodoro();
+    });
+  }
+
+  if (refs.pomoTest) {
+    refs.pomoTest.addEventListener("click", () => {
+      playPomodoroAlarm();
+    });
+  }
+
   setInterval(() => {
     if (!pomodoro.running) return;
     const now = Date.now();
@@ -502,6 +598,7 @@ function setupPomodoro() {
     if (pomodoro.remainingSec <= 0) {
       pomodoro.running = false;
       pomodoro.lastTickMs = null;
+      void playPomodoroAlarm();
     }
 
     saveJSON(STORAGE_KEYS.pomodoro, pomodoro);

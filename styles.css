@@ -293,8 +293,8 @@ h3 {
 
 .pomodoro-round {
   position: relative;
-  width: 104px;
-  height: 104px;
+  width: 148px;
+  height: 148px;
   margin: 0 auto 8px;
 }
 
@@ -325,7 +325,7 @@ h3 {
   inset: 0;
   display: grid;
   place-items: center;
-  font: 700 1.1rem/1 "Space Grotesk", sans-serif;
+  font: 700 1.45rem/1 "Space Grotesk", sans-serif;
   color: #dcf7f4;
 }
 
@@ -336,8 +336,57 @@ h3 {
 }
 
 .pomodoro-actions button {
-  padding: 6px 8px;
-  font-size: 0.78rem;
+  padding: 5px 7px;
+  font-size: 0.72rem;
+}
+
+.pomo-side-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  line-height: 1;
+  font-weight: 800;
+  z-index: 2;
+}
+
+#pomo-minus {
+  left: -14px;
+}
+
+#pomo-plus {
+  right: -14px;
+}
+
+.pomodoro-alarm {
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.pomodoro-alarm label {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.pomodoro-alarm select {
+  border: 1px solid rgba(97, 130, 255, 0.35);
+  border-radius: 9px;
+  background: rgba(9, 15, 34, 0.75);
+  color: var(--text);
+  padding: 5px 8px;
+  font-size: 0.72rem;
+}
+
+.pomodoro-alarm button {
+  padding: 5px 8px;
+  font-size: 0.7rem;
 }
 
 .weather-main {

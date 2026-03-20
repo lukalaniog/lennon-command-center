@@ -97,15 +97,26 @@
           <span class="badge" id="pomo-status">Paused</span>
         </div>
         <div class="pomodoro-round">
+          <button id="pomo-minus" type="button" class="pomo-side-btn" aria-label="Decrease timer">-</button>
           <svg viewBox="0 0 120 120" aria-hidden="true">
             <circle class="pomo-track" cx="60" cy="60" r="52"></circle>
             <circle class="pomo-progress" id="pomo-progress" cx="60" cy="60" r="52"></circle>
           </svg>
           <div class="pomodoro-time" id="pomo-time">25:00</div>
+          <button id="pomo-plus" type="button" class="pomo-side-btn" aria-label="Increase timer">+</button>
         </div>
         <div class="pomodoro-actions">
           <button id="pomo-start" type="button">Start</button>
           <button id="pomo-reset" type="button">Reset</button>
+        </div>
+        <div class="pomodoro-alarm">
+          <label for="pomo-alarm">Alarm</label>
+          <select id="pomo-alarm">
+            <option value="beep">Beep</option>
+            <option value="bell">Bell</option>
+            <option value="digital">Digital</option>
+          </select>
+          <button id="pomo-test" type="button">Test</button>
         </div>
       </div>
       <p class="tiny-note">Bells use your signed-in browser session when accessible.</p>
